@@ -14,7 +14,7 @@ UCLASS()
 class UNKOWN_API UDebugFunLib : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
-
+public:
 	UFUNCTION(BlueprintCallable,Category="Debug")
 	static void DebugLog(FEnumSet::DebugLogType logType,FString context);
 };
