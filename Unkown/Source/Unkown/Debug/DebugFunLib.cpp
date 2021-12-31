@@ -2,30 +2,35 @@
 #include "DebugFunLib.h"
 #include <string>
 
-DEFINE_LOG_CATEGORY(Debug); 
+DEFINE_LOG_CATEGORY(DebugLog); 
 
-void UDebugFunLib::DebugLog(FEnumSet::DebugLogType logType, FString context)
+std::string CFILE = "";
+std::string CFUNC = "";
+std::string FILENAME = "";
+std::string::size_type IPOS = 0;
+int LINE = 0;
+FString FFILE = TEXT("");
+FString FFUNC = TEXT("");
+
+void UDebugFunLib::PrintDebugLog(FEnumSet::DebugLogType logType, FString context)
 {  
-	std::string File = __FILE__;
-	std::string Func = __func__;
-	int Line = __LINE__;
-	std::string::size_type iPos = File.find_last_of("\\") + 1;
-	std::string FileName = File.substr(iPos, File.length() - iPos);
-	FString FFile = FString(FileName.c_str());
-	FString FFunc = FString(Func.c_str());
-	UE_LOG(Debug, Error, TEXT("FILE:%s"), *FFile);
-	UE_LOG(Debug, Error, TEXT("FUNC:%s"), *FFunc);
-	UE_LOG(Debug, Error, TEXT("LINE:%d"), Line);
+	CFILE = __FILE__;
+	CFUNC = __func__;
+	LINE = __LINE__;
+	IPOS = CFILE.find_last_of("\\") + 1;
+	FILENAME = CFILE.substr(IPOS, CFILE.length() - IPOS);
+	FFILE = FString(FILENAME.c_str());
+	FFUNC = FString(CFUNC.c_str());
 	switch (logType)
 	{
 	case FEnumSet::Log:
-		UE_LOG(Debug, Log, TEXT("[%s:%s:%d]%s"), *FFile, *FFunc, Line, *context);
+		UE_LOG(DebugLog, Log, TEXT("[%s:%s:%d]%s"), *FFILE, *FFUNC, LINE, *context);
 		break;
 	case FEnumSet::Warning:
-		UE_LOG(Debug, Warning, TEXT("[%s:%s:%d]%s"), *FFile, *FFunc, Line, *context);
+		UE_LOG(DebugLog, Warning, TEXT("[%s:%s:%d]%s"), *FFILE, *FFUNC, LINE, *context);
 		break;
 	case FEnumSet::Error:
-		UE_LOG(Debug, Error, TEXT("[%s:%s:%d]%s"), *FFile, *FFunc, Line, *context);
+		UE_LOG(DebugLog, Error, TEXT("[%s:%s:%d]%s"), *FFILE, *FFUNC, LINE, *context);
 		break;
 	}  
 }

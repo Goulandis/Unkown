@@ -8,7 +8,7 @@ public class Unkown : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore","PakFile" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore","Paper2D","PakFile" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 

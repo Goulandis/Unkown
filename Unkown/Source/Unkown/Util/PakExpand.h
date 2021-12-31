@@ -11,16 +11,24 @@
 /**
  * 
  */
-UCLASS(BlueprintType)
+UCLASS(Blueprintable,BlueprintType)
 class UNKOWN_API UPakExpand : public UObject
 {
 	GENERATED_BODY()
 private:
 	TSharedPtr<FPakPlatformFile> PakPlatformFile;
 	IPlatformFile* HandlePlatform;
+	FPlatformFileManager* PlatformFileManager;
+private:
+	~UPakExpand();
 public:
 	UPakExpand();
 
 	UFUNCTION(BlueprintCallable,Category="PakExpand")
 	bool Mount(FString PakFilePath);
+	UFUNCTION(BlueprintCallable, Category = "PakExpand")
+	FString GetPakFileName(FString PakFilePath);
+	UFUNCTION(BlueprintCallable, Category = "PakExpand")
+	FString GetAssestRefDir(FString MountPoint);
+	void OnFinishLoadResource();
 };
