@@ -16,9 +16,11 @@ class UNKOWN_API UPakExpand : public UObject
 {
 	GENERATED_BODY()
 private:
-	TSharedPtr<FPakPlatformFile> PakPlatformFile;
+	FPakPlatformFile* PakPlatformFile;
 	IPlatformFile* HandlePlatform;
 	FPlatformFileManager* PlatformFileManager;
+	TArray<FSoftObjectPath> ObjectPaths;
+	TArray<TSoftObjectPtr<UObject>> ObjectPtrs;
 private:
 	~UPakExpand();
 public:

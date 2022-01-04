@@ -14,23 +14,23 @@ FString FFUNC = TEXT("");
 
 void UDebugFunLib::PrintDebugLog(FEnumSet::DebugLogType logType, FString context)
 {  
-	CFILE = __FILE__;
-	CFUNC = __func__;
-	LINE = __LINE__;
-	IPOS = CFILE.find_last_of("\\") + 1;
-	FILENAME = CFILE.substr(IPOS, CFILE.length() - IPOS);
-	FFILE = FString(FILENAME.c_str());
-	FFUNC = FString(CFUNC.c_str());
+	//CFILE = __FILE__;
+	//CFUNC = __func__;
+	//LINE = __LINE__;
+	//IPOS = CFILE.find_last_of("\\") + 1;
+	//FILENAME = CFILE.substr(IPOS, CFILE.length() - IPOS);
+	//FFILE = FString(FILENAME.c_str());
+	//FFUNC = FString(CFUNC.c_str());
 	switch (logType)
 	{
 	case FEnumSet::Log:
-		UE_LOG(DebugLog, Log, TEXT("[%s:%s:%d]%s"), *FFILE, *FFUNC, LINE, *context);
+		UE_LOG(DebugLog, Log, TEXT("%s"), *context);
 		break;
 	case FEnumSet::Warning:
-		UE_LOG(DebugLog, Warning, TEXT("[%s:%s:%d]%s"), *FFILE, *FFUNC, LINE, *context);
+		UE_LOG(DebugLog, Warning, TEXT("%s"), *context);
 		break;
 	case FEnumSet::Error:
-		UE_LOG(DebugLog, Error, TEXT("[%s:%s:%d]%s"), *FFILE, *FFUNC, LINE, *context);
+		UE_LOG(DebugLog, Error, TEXT("%s"), *context);
 		break;
 	}  
 }

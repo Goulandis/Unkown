@@ -31,7 +31,7 @@ bool UPakExpand::Mount(FString PakFilePath)
     if (!PakPlatformFile)
     {
         //创建Pak平台文件系统
-        PakPlatformFile = MakeShareable<FPakPlatformFile>(new FPakPlatformFile());
+        PakPlatformFile = new FPakPlatformFile();
     }
     //使用平台接口初始化Pak文件平台包装器
     PakPlatformFile->Initialize(HandlePlatform, TEXT(""));
@@ -45,7 +45,7 @@ bool UPakExpand::Mount(FString PakFilePath)
         return false;
     }
     //创建pak对象
-    TSharedPtr<FPakFile> PakFile = MakeShareable<FPakFile>(new FPakFile(PakPlatformFile.Get(), *PakFilePath, false));
+    TSharedPtr<FPakFile> PakFile = MakeShareable<FPakFile>(new FPakFile(PakPlatformFile, *PakFilePath, false));
     if (!PakFile)
     {
         DEBUGLOG(FEnumSet::DebugLogType::Error, (TEXT("Failed to construct pak file that path is ") + PakFilePath)); 
@@ -81,27 +81,43 @@ bool UPakExpand::Mount(FString PakFilePath)
     }
     DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("Successfully mount pak file at ") + PakFile->GetMountPoint() + TEXT(" mount point")));
 
-    //TArray<FString> FileList;
-    //PakFile->FindFilesAtPath(FileList, *PakFile->GetMountPoint(), true, false, true);
-    //DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("FileList Num=") + FString::FromInt(FileList.Num())));
+    TArray<FString> FileList;
+    PakFile->FindFilesAtPath(FileList, *PakFile->GetMountPoint(), true, false, true);
+    DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("FileList Num=") + FString::FromInt(FileList.Num())));
     //TArray<FSoftObjectPath> AllReourcePath;
-    //for (FString File : FileList)
-    //{
-    //    DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("FileList FileName=") + File));
-    //    if (File.Contains(TEXT(".uasset")))
-    //    {
-    //        File.ReplaceInline(*FPaths::ProjectContentDir(), TEXT("/Game/"));
-    //        DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("FileReplaceInline=") + File));
-    //        FString FileName = FPaths::GetBaseFilename(File);
-    //        DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("FileName=") + FileName));
-    //        File.ReplaceInline(TEXT("uasset"), *FileName);
-    //        AllReourcePath.AddUnique(File);
-    //    }
-    //}
+    for (FString File : FileList)
+    {
+        DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("FileList FileName=") + File));
+        /*if (File.Contains(TEXT(".uasset")))
+        {*/
+            /*File.ReplaceInline(*FPaths::ProjectContentDir(), TEXT("/Game/"));
+            DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("FileReplaceInline=") + File));
+            FString FileName = FPaths::GetBaseFilename(File);
+            DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("FileName=") + FileName));
+            File.ReplaceInline(TEXT("uasset"), *FileName);
+            ObjectPaths.AddUnique(File);*/
+
+            FString Filename, FileExtn;
+            int32 LastSlashIndex;
+            File.FindLastChar(*TEXT("/"), LastSlashIndex);
+            FString FileOnly = File.RightChop(LastSlashIndex + 1);
+            FileOnly.Split(TEXT("."), &Filename, &FileExtn);
+
+            if (FileExtn == TEXT("uasset"))
+            {
+                File = FileOnly.Replace(TEXT("uasset"), *Filename);
+                File = TEXT("/Engine/") + File;
+                ObjectPaths.AddUnique(FSoftObjectPath(File));
+
+                //将FSoftObjectPath直接转换为TSoftObjectPtr<UObject>并储存
+                ObjectPtrs.AddUnique(TSoftObjectPtr<UObject>(ObjectPaths[ObjectPaths.Num() - 1]));
+            }
+        //}
+    }
     //FStreamableManager& AssetLoader = UAssetManager::GetStreamableManager();
-    //AssetLoader.RequestAsyncLoad(AllReourcePath, FStreamableDelegate::CreateUObject(this, &UPakExpand::OnFinishLoadResource));
+    //AssetLoader.RequestAsyncLoad(ObjectPaths, FStreamableDelegate::CreateUObject(this, &UPakExpand::OnFinishLoadResource));
     //加载资源
-    FString AssestRef = TEXT("Blueprint'/Game/") + GetAssestRefDir(PakFile->GetMountPoint()) + TEXT("/") + PakName + TEXT(".") + PakName + TEXT("_C'");
+    /*FString AssestRef = TEXT("Blueprint'/Game/") + GetAssestRefDir(PakFile->GetMountPoint()) + TEXT("/") + PakName + TEXT(".") + PakName + TEXT("_C'");
     UClass* uclass = StaticLoadClass(AActor::StaticClass(), NULL, *AssestRef);
     if (!uclass)
     {
@@ -109,9 +125,9 @@ bool UPakExpand::Mount(FString PakFilePath)
         PlatformFileManager->SetPlatformFile(*HandlePlatform);
         return false;
     }
-    GetWorld()->SpawnActor(uclass);
+    GetWorld()->SpawnActor(uclass);*/
     PlatformFileManager->SetPlatformFile(*HandlePlatform);
-    DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("Successfully loaded assest that assest reference is ") + AssestRef));
+    //DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("Successfully loaded assest that assest reference is ") + AssestRef));
     return true;
 }
 
