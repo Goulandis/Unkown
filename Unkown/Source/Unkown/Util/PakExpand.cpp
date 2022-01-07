@@ -5,51 +5,83 @@
 
 UPakExpand::~UPakExpand()
 {
+    delete HandlePakPlatform;
     PlatformFileManager = nullptr;
-    HandlePlatform = nullptr;
-    PakPlatformFile = nullptr;
+    HandleOriginPlatform = nullptr;
+    HandlePakPlatform = nullptr; 
+}
+
+FPakPlatformFile* UPakExpand::GetHandlePakPlatform()
+{
+    if (!HandlePakPlatform)
+    {
+        //创建Pak平台文件系统
+        HandlePakPlatform = new FPakPlatformFile();
+        //使用平台接口初始化Pak文件平台包装器
+        HandlePakPlatform->Initialize(GetHandleOriginPlatform(), TEXT(""));
+    }
+    return HandlePakPlatform;
+}
+
+IPlatformFile* UPakExpand::GetHandleOriginPlatform()
+{
+    if (!HandleOriginPlatform)
+    {
+        //获取平台I/O接口，用于操作平台文件
+        HandleOriginPlatform = &GetPlatformFileManager()->GetPlatformFile();
+    }
+    return HandleOriginPlatform;
+}
+
+FPlatformFileManager* UPakExpand::GetPlatformFileManager()
+{
+    if (!PlatformFileManager)
+    {
+        //获取平台文件链接管理器
+        PlatformFileManager = &FPlatformFileManager::Get();     
+    }
+    return PlatformFileManager;
+}
+
+bool UPakExpand::IsClassReference(const FString ClassRef)
+{
+    return Regular(ClassRef,TEXT("^Blueprint'/Game/.*_C'$"));
 }
 
 UPakExpand::UPakExpand()
-{
-    //获取平台文件链接管理器
-    PlatformFileManager = &FPlatformFileManager::Get();
-    //获取平台I/O接口，用于操作平台文件
-    HandlePlatform = &PlatformFileManager->GetPlatformFile();
+{   
+    GetPlatformFileManager();
+    GetHandleOriginPlatform();
+    GetHandlePakPlatform();   
 }
 
-bool UPakExpand::Mount(FString PakFilePath)
+bool UPakExpand::Mount(const FString PakFilePath)
 {
     DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("Start to mount pak file and PakFilePath is ") + PakFilePath));
     //判断文件时候是pak文件
     if (!PakFilePath.EndsWith(".pak"))
     {
         DEBUGLOG(FEnumSet::DebugLogType::Warning, (PakFilePath + TEXT(" file is not pak file")));
+        DelegateMountAffter.Broadcast(TEXT("FileIsNotPak"));
         return false;
-    }
-    
-    if (!PakPlatformFile)
-    {
-        //创建Pak平台文件系统
-        PakPlatformFile = new FPakPlatformFile();
-    }
-    //使用平台接口初始化Pak文件平台包装器
-    PakPlatformFile->Initialize(HandlePlatform, TEXT(""));
+    } 
     //将PakPlatformFile设置到最顶层，查找文件时优先查找PakPlatformFile内的文件
-    PlatformFileManager->SetPlatformFile(*PakPlatformFile);
+    GetPlatformFileManager()->SetPlatformFile(*GetHandlePakPlatform());
     //判断文件是否存在
-    if (!HandlePlatform->FileExists(*PakFilePath))
+    if (!GetHandleOriginPlatform()->FileExists(*PakFilePath))
     {
         DEBUGLOG(FEnumSet::DebugLogType::Error, (TEXT("The file isn't exists that path is ") + PakFilePath));   
-        PlatformFileManager->SetPlatformFile(*HandlePlatform);
+        GetPlatformFileManager()->SetPlatformFile(*GetHandleOriginPlatform());
+        DelegateMountAffter.Broadcast(TEXT("FileIsNotExists"));
         return false;
     }
     //创建pak对象
-    TSharedPtr<FPakFile> PakFile = MakeShareable<FPakFile>(new FPakFile(PakPlatformFile, *PakFilePath, false));
+    TSharedPtr<FPakFile> PakFile = MakeShareable<FPakFile>(new FPakFile(GetHandlePakPlatform(), *PakFilePath, false));
     if (!PakFile)
     {
         DEBUGLOG(FEnumSet::DebugLogType::Error, (TEXT("Failed to construct pak file that path is ") + PakFilePath)); 
-        PlatformFileManager->SetPlatformFile(*HandlePlatform);
+        GetPlatformFileManager()->SetPlatformFile(*GetHandleOriginPlatform());
+        DelegateMountAffter.Broadcast(TEXT("PakIsNotValid"));
         return false;
     }   
     //获取pak文件的无后缀文件名
@@ -57,81 +89,36 @@ bool UPakExpand::Mount(FString PakFilePath)
     DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("Successfully constructed FPakFile that name is ") + PakName));
     TArray<FString> ExistPakFiles;
     //查询已挂载的所有pak包名称
-    PakPlatformFile->GetMountedPakFilenames(ExistPakFiles);
+    GetHandlePakPlatform()->GetMountedPakFilenames(ExistPakFiles);
     //判断当前pak包是否已挂载
     if (ExistPakFiles.Find(PakFilePath) >= 0)
     {
         DEBUGLOG(FEnumSet::DebugLogType::Warning, (PakName + TEXT(" is mounted")));
-        PlatformFileManager->SetPlatformFile(*HandlePlatform);
+        GetPlatformFileManager()->SetPlatformFile(*GetHandleOriginPlatform());
+        DelegateMountAffter.Broadcast(TEXT("PakHasMount"));
         return false;
     }
     int32 Pos = PakFile->GetMountPoint().Find("Content/");
     FString MountPoint = PakFile->GetMountPoint().RightChop(Pos);
-    DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("PakFile mount point at ") + MountPoint));
     MountPoint = FPaths::ProjectDir() + MountPoint;
-    DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("New mount point at ") + MountPoint));
-    //MountPoint = FPaths::ProjectDir() + TEXT("Content/DLCs/");
     PakFile->SetMountPoint(*MountPoint);
     //使用pak包记录的挂载点挂载pak包
-    if (!PakPlatformFile->Mount(*PakFilePath, 0, *PakFile->GetMountPoint()))
+    if (!GetHandlePakPlatform()->Mount(*PakFilePath, 0, *PakFile->GetMountPoint()))
     {
         DEBUGLOG(FEnumSet::DebugLogType::Error, (TEXT("Failed to mount pak file at ") + PakFile->GetMountPoint() + TEXT(" mount point that path is ") + PakFilePath));
-        PlatformFileManager->SetPlatformFile(*HandlePlatform);
+        GetPlatformFileManager()->SetPlatformFile(*GetHandleOriginPlatform());
+        DelegateMountAffter.Broadcast(TEXT("FailedToMount"));
         return false;
     }
     DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("Successfully mount pak file at ") + PakFile->GetMountPoint() + TEXT(" mount point")));
 
-    TArray<FString> FileList;
-    PakFile->FindFilesAtPath(FileList, *PakFile->GetMountPoint(), true, false, true);
-    DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("FileList Num=") + FString::FromInt(FileList.Num())));
-    //TArray<FSoftObjectPath> AllReourcePath;
-    for (FString File : FileList)
-    {
-        DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("FileList FileName=") + File));
-        /*if (File.Contains(TEXT(".uasset")))
-        {*/
-            /*File.ReplaceInline(*FPaths::ProjectContentDir(), TEXT("/Game/"));
-            DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("FileReplaceInline=") + File));
-            FString FileName = FPaths::GetBaseFilename(File);
-            DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("FileName=") + FileName));
-            File.ReplaceInline(TEXT("uasset"), *FileName);
-            ObjectPaths.AddUnique(File);*/
-
-            FString Filename, FileExtn;
-            int32 LastSlashIndex;
-            File.FindLastChar(*TEXT("/"), LastSlashIndex);
-            FString FileOnly = File.RightChop(LastSlashIndex + 1);
-            FileOnly.Split(TEXT("."), &Filename, &FileExtn);
-
-            if (FileExtn == TEXT("uasset"))
-            {
-                File = FileOnly.Replace(TEXT("uasset"), *Filename);
-                File = TEXT("/Engine/") + File;
-                ObjectPaths.AddUnique(FSoftObjectPath(File));
-
-                //将FSoftObjectPath直接转换为TSoftObjectPtr<UObject>并储存
-                ObjectPtrs.AddUnique(TSoftObjectPtr<UObject>(ObjectPaths[ObjectPaths.Num() - 1]));
-            }
-        //}
-    }
-    //FStreamableManager& AssetLoader = UAssetManager::GetStreamableManager();
-    //AssetLoader.RequestAsyncLoad(ObjectPaths, FStreamableDelegate::CreateUObject(this, &UPakExpand::OnFinishLoadResource));
-    //加载资源
-    /*FString AssestRef = TEXT("Blueprint'/Game/") + GetAssestRefDir(PakFile->GetMountPoint()) + TEXT("/") + PakName + TEXT(".") + PakName + TEXT("_C'");
-    UClass* uclass = StaticLoadClass(AActor::StaticClass(), NULL, *AssestRef);
-    if (!uclass)
-    {
-        DEBUGLOG(FEnumSet::DebugLogType::Error, (TEXT("Failed to load class that reference is ") + AssestRef));     
-        PlatformFileManager->SetPlatformFile(*HandlePlatform);
-        return false;
-    }
-    GetWorld()->SpawnActor(uclass);*/
-    PlatformFileManager->SetPlatformFile(*HandlePlatform);
-    //DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("Successfully loaded assest that assest reference is ") + AssestRef));
+    MapPakFile.Add(PakFilePath, PakFile.Get());
+    DelegateMountAffter.Broadcast(TEXT("SuccessfullyMount"));
+    GetPlatformFileManager()->SetPlatformFile(*GetHandleOriginPlatform());
     return true;
 }
 
-FString UPakExpand::GetPakFileName(FString PakFilePath)
+FString UPakExpand::GetPakFileName(const FString PakFilePath)
 {
     FString SubLeft;
     FString SubRight;
@@ -170,6 +157,50 @@ FString UPakExpand::GetAssestRefDir(FString MountPoint)
     return SubLeft;
 }
 
-void UPakExpand::OnFinishLoadResource()
+bool UPakExpand::Regular(const FString Str, const FString Reg)
 {
+    FRegexPattern Pattern(Reg);
+    FRegexMatcher RegMatcher(Pattern, Str);
+    RegMatcher.SetLimits(0, Str.Len());
+    return RegMatcher.FindNext();
+}
+
+AActor* UPakExpand::SpawnActorFromPak(FString ClassRef, FTransform Transform, bool& Result)
+{
+    if (!IsClassReference(ClassRef))
+    {
+        DEBUGLOG(FEnumSet::DebugLogType::Error, (ClassRef + TEXT(" class reference is incorrent")));
+        Result = false;
+        return nullptr;
+    }
+    GetPlatformFileManager()->SetPlatformFile(*GetHandlePakPlatform());
+    UClass* uclass = StaticLoadClass(AActor::StaticClass(), NULL, *ClassRef);
+    if (!uclass)
+    {
+        DEBUGLOG(FEnumSet::DebugLogType::Error, (TEXT("Failed to load class that reference is ") + ClassRef));
+        Result = false;
+        GetPlatformFileManager()->SetPlatformFile(*GetHandleOriginPlatform());
+        return nullptr;
+    }
+    AActor* Actor = GetWorld()->SpawnActor(uclass,&Transform);
+    if (!Actor)
+    {
+        DEBUGLOG(FEnumSet::DebugLogType::Error, (TEXT("Failed to create actor with ") + ClassRef));
+        Result = false;
+        GetPlatformFileManager()->SetPlatformFile(*GetHandleOriginPlatform());
+        return nullptr;
+    }   
+    Result = true;
+    GetPlatformFileManager()->SetPlatformFile(*GetHandleOriginPlatform());
+    return Actor;
+}
+
+UObject* UPakExpand::NewObjectFromPak(FString ClassRef, bool& Result)
+{
+    return nullptr;
+}
+
+void UPakExpand::ReadFile(FString FilePath)
+{
+
 }

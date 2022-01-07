@@ -8,29 +8,41 @@
 #include "UObject/NoExportTypes.h"
 #include "PakExpand.generated.h"
 
-/**
- * 
- */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMountAffter, FString,Type);
+
 UCLASS(Blueprintable,BlueprintType)
 class UNKOWN_API UPakExpand : public UObject
 {
 	GENERATED_BODY()
 private:
-	FPakPlatformFile* PakPlatformFile;
-	IPlatformFile* HandlePlatform;
+	FPakPlatformFile* HandlePakPlatform;
+	IPlatformFile* HandleOriginPlatform;
 	FPlatformFileManager* PlatformFileManager;
-	TArray<FSoftObjectPath> ObjectPaths;
-	TArray<TSoftObjectPtr<UObject>> ObjectPtrs;
+public:
+	TMap<FString, FPakFile*> MapPakFile;
+	UPROPERTY(BlueprintAssignable,Category="PakExpand")
+	FMountAffter DelegateMountAffter;
 private:
 	~UPakExpand();
+	FPakPlatformFile* GetHandlePakPlatform();
+	IPlatformFile* GetHandleOriginPlatform();
+	FPlatformFileManager* GetPlatformFileManager();
+	bool IsClassReference(const FString ClassRef);
 public:
 	UPakExpand();
 
 	UFUNCTION(BlueprintCallable,Category="PakExpand")
-	bool Mount(FString PakFilePath);
+	bool Mount(const FString PakFilePath);
 	UFUNCTION(BlueprintCallable, Category = "PakExpand")
-	FString GetPakFileName(FString PakFilePath);
+	FString GetPakFileName(const FString PakFilePath);
 	UFUNCTION(BlueprintCallable, Category = "PakExpand")
 	FString GetAssestRefDir(FString MountPoint);
-	void OnFinishLoadResource();
+	UFUNCTION(BlueprintCallable, Category = "PakExpand")
+	bool Regular(const FString Str, const FString Ref);
+	UFUNCTION(BlueprintCallable, Category = "PakExpand")
+	AActor* SpawnActorFromPak(FString ClassRef, FTransform Transform, bool& Result);
+	UFUNCTION(BlueprintCallable, Category = "PakExpand")
+	UObject* NewObjectFromPak(FString ClassRef, bool& Result);
+	UFUNCTION(BlueprintCallable, Category = "PakExpand")
+	void ReadFile(FString FilePath);
 };
