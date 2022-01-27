@@ -2,13 +2,19 @@
 #include "../Debug/DebugFunLib.h"
 #include "Engine/StreamableManager.h"
 #include "Engine/AssetManager.h"
+#include "Json.h"
+#include "Dom/JsonObject.h"
+#include "Serialization/JsonSerializer.h"
+
+UPakExpand::UPakExpand()
+{
+    GetPlatformFileManager();
+    GetHandleOriginPlatform();
+    GetHandlePakPlatform();
+}
 
 UPakExpand::~UPakExpand()
 {
-    delete HandlePakPlatform;
-    PlatformFileManager = nullptr;
-    HandleOriginPlatform = nullptr;
-    HandlePakPlatform = nullptr; 
 }
 
 FPakPlatformFile* UPakExpand::GetHandlePakPlatform()
@@ -48,11 +54,16 @@ bool UPakExpand::IsClassReference(const FString ClassRef)
     return Regular(ClassRef,TEXT("^Blueprint'/Game/.*_C'$"));
 }
 
-UPakExpand::UPakExpand()
-{   
-    GetPlatformFileManager();
-    GetHandleOriginPlatform();
-    GetHandlePakPlatform();   
+void UPakExpand::GetEncryptKey(uint8* Key)
+{
+    if (KeyBase64Ary.Num() >= 0)
+    {
+        FMemory::Memcpy(Key, KeyBase64Ary.GetData(), FAES::FAESKey::KeySize);
+    }
+    else
+    {
+        DEBUGLOG(FEnumSet::DebugLogType::Error, FString("The EncryptKey is null"));
+    }
 }
 
 bool UPakExpand::Mount(const FString PakFilePath)
@@ -83,7 +94,7 @@ bool UPakExpand::Mount(const FString PakFilePath)
         GetPlatformFileManager()->SetPlatformFile(*GetHandleOriginPlatform());
         DelegateMountAffter.Broadcast(TEXT("PakIsNotValid"));
         return false;
-    }   
+    } 
     //获取pak文件的无后缀文件名
     FString PakName = GetPakFileName(PakFilePath);
     DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("Successfully constructed FPakFile that name is ") + PakName));
@@ -99,7 +110,7 @@ bool UPakExpand::Mount(const FString PakFilePath)
         return false;
     }
     int32 Pos = PakFile->GetMountPoint().Find("Content/");
-    FString MountPoint = PakFile->GetMountPoint().RightChop(Pos);
+    FString MountPoint = PakFile->GetMountPoint().RightChop(Pos);    
     MountPoint = FPaths::ProjectDir() + MountPoint;
     PakFile->SetMountPoint(*MountPoint);
     //使用pak包记录的挂载点挂载pak包
@@ -116,6 +127,64 @@ bool UPakExpand::Mount(const FString PakFilePath)
     DelegateMountAffter.Broadcast(TEXT("SuccessfullyMount"));
     GetPlatformFileManager()->SetPlatformFile(*GetHandleOriginPlatform());
     return true;
+}
+
+bool UPakExpand::Mount(const FString PakFilePath, const FString CryptoJsonPath)
+{
+    if (!CryptoJsonPath.IsEmpty())
+    {
+        UnEncrypt(CryptoJsonPath);
+        FCoreDelegates::GetPakEncryptionKeyDelegate().BindUObject(this, &UPakExpand::GetEncryptKey);
+        DEBUGLOG(FEnumSet::DebugLogType::Log, FString("PakEncryptionKeyDelegate has bind UPakExpand::UnEncrypt"));
+    }  
+    return Mount(PakFilePath);  
+}
+
+TArray<FString> UPakExpand::GetAllPakFromDir(const FString Dir, bool& Result)
+{
+    FString PakDir(FPaths::ProjectContentDir() + Dir + TEXT("/"));
+    IFileManager& FileManager = IFileManager::Get();
+    TArray<FString> ResultList;
+    if (FileManager.DirectoryExists(*PakDir))
+    {
+        TArray<FString> PakList;      
+        FileManager.FindFiles(PakList, *PakDir,TEXT("*.pak"));
+        for (int i = 0; i < PakList.Num(); i++)
+        {
+            FString PakFilePath(PakDir + PakList[i]);
+            DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("PakName:") + PakFilePath));
+            ResultList.Add(PakFilePath);
+        }
+        Result = true;
+    }
+    if (ResultList.Num() <= 0)
+    {
+        Result = false;
+    }
+    return ResultList;
+}
+
+void UPakExpand::UnEncrypt(const FString CryptoJsonPath)
+{
+    if (!FPaths::FileExists(CryptoJsonPath))
+    {
+        DEBUGLOG(FEnumSet::DebugLogType::Log, (CryptoJsonPath + TEXT(" file is not exists")));
+        return;
+    }
+    FString JsonStr;
+    FFileHelper::LoadFileToString(JsonStr, *CryptoJsonPath);
+    TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject());
+    TSharedRef<TJsonReader<>> JsonReader = TJsonReaderFactory<>::Create(JsonStr);
+    FString KeyStr;
+    if (FJsonSerializer::Deserialize(JsonReader, JsonObject))
+    {
+        TSharedPtr<FJsonObject> EncryptionKey = JsonObject->GetObjectField(TEXT("EncryptionKey"));
+        KeyStr = EncryptionKey->GetStringField(TEXT("Key"));
+        DEBUGLOG(FEnumSet::DebugLogType::Log, (TEXT("Successfully read crypto key:") + KeyStr));
+        FBase64::Decode(KeyStr, KeyBase64Ary);
+        //EncryptKey = (uint8*)malloc(FAES::FAESKey::KeySize);
+        //FMemory::Memcpy(EncryptKey, KeyBase64Ary.GetData(), FAES::FAESKey::KeySize);
+    }   
 }
 
 FString UPakExpand::GetPakFileName(const FString PakFilePath)

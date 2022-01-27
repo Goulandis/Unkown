@@ -18,6 +18,8 @@ private:
 	FPakPlatformFile* HandlePakPlatform;
 	IPlatformFile* HandleOriginPlatform;
 	FPlatformFileManager* PlatformFileManager;
+	uint8* EncryptKey;
+	TArray<uint8> KeyBase64Ary;
 public:
 	TMap<FString, FPakFile*> MapPakFile;
 	UPROPERTY(BlueprintAssignable,Category="PakExpand")
@@ -28,11 +30,15 @@ private:
 	IPlatformFile* GetHandleOriginPlatform();
 	FPlatformFileManager* GetPlatformFileManager();
 	bool IsClassReference(const FString ClassRef);
+	void GetEncryptKey(uint8* Key);
 public:
 	UPakExpand();
-
-	UFUNCTION(BlueprintCallable,Category="PakExpand")
 	bool Mount(const FString PakFilePath);
+	UFUNCTION(BlueprintCallable, Category = "PakExpand")
+	bool Mount(const FString PakFilePath, const FString CryptoJsonPath);
+	UFUNCTION(BlueprintCallable, Category = "PakExpand")
+	TArray<FString> GetAllPakFromDir(const FString Dir,bool& Result);
+	void UnEncrypt(const FString CryptoJsonPath);
 	UFUNCTION(BlueprintCallable, Category = "PakExpand")
 	FString GetPakFileName(const FString PakFilePath);
 	UFUNCTION(BlueprintCallable, Category = "PakExpand")
